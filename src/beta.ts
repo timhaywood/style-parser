@@ -6,18 +6,28 @@ type Parser = { style: string; matcher: RegExp; transforms: Transform[] };
 type Transform = { method: string; value: any };
 type Method = { method: string; args: any[] };
 
-export function parse(markdown: string, customParsers: Parser[]) {
-  const parsers = createParsers(customParsers);
-  const { cleaned, methods } = parseMarkdown(markdown, parsers);
-  return createRender(cleaned, methods);
+type Options = {
+  markdown: string;
+  parsers: Parser[];
+  fontMap: FontMap;
+  baseStyles: Method[];
+};
+
+export function parse({
+  markdown,
+  parsers,
+  fontMap = fonts,
+  baseStyles,
+}: Options) {
+  const _parsers = createParsers(parsers);
+  const { cleaned, methods } = parseMarkdown(markdown, _parsers);
+  return createRender(cleaned, methods, fontMap, baseStyles);
 }
 
 export function parseMarkdown(
   markdown: string,
   parsers: Parser[] = createParsers()
 ): { cleaned: string; methods: Method[] } {
-  const methods: Method[] = [];
-
   const allMatches: { match: RegExpExecArray; parser: Parser }[] = [];
 
   parsers.forEach((parser) => {
@@ -29,6 +39,7 @@ export function parseMarkdown(
 
   let cleaned = markdown;
   let removedChars = 0;
+  const methods: Method[] = [];
 
   allMatches.forEach(({ match, parser }) => {
     const start = match.index!;
@@ -49,22 +60,40 @@ export function parseMarkdown(
   return { cleaned, methods };
 }
 
+type FontMap = Record<'regular' | 'bold' | 'italic', string>;
+export const fonts: FontMap = {
+  regular: 'Menlo-Regular', // 'CascadiaCode-Regular',
+  bold: 'Menlo-Bold', // 'CascadiaCodeRoman-Bold',
+  italic: 'Menlo-Italic', // 'CascadiaCode-Italic',
+};
+
+function mapToFont(methods: Method[], fonts: FontMap) {
+  for (const method of methods) {
+    method.args = method.args.map((a) =>
+      typeof a === 'string'
+        ? a.replace(/%(\w+)%/, (_, key) => fonts[key as keyof typeof fonts])
+        : a
+    );
+  }
+  return methods;
+}
+
 export const parsers = [
   {
     style: 'bold',
     matcher: /\*(.*?)\*/g,
-    transforms: [{ method: 'setFont', value: 'Menlo-Bold' }],
+    transforms: [{ method: 'setFont', value: '%bold%' }],
   },
   {
     style: 'italic',
     matcher: /_(.*?)_/g,
-    transforms: [{ method: 'setFont', value: 'Menlo-Italic' }],
+    transforms: [{ method: 'setFont', value: '%italic%' }],
   },
   {
     style: 'h1',
     matcher: /^#\s+(.*)/gm,
     transforms: [
-      { method: 'setFont', value: 'Menlo-Bold' },
+      { method: 'setFont', value: '%bold%' },
       { method: 'setFontSize', value: 72 },
     ],
   },
@@ -72,7 +101,7 @@ export const parsers = [
     style: 'h2',
     matcher: /^##\s+(.*)/gm,
     transforms: [
-      { method: 'setFont', value: 'Menlo-Bold' },
+      { method: 'setFont', value: '%bold%' },
       { method: 'setFontSize', value: 60 },
     ],
   },
@@ -80,7 +109,7 @@ export const parsers = [
     style: 'h3',
     matcher: /^###\s+(.*)/gm,
     transforms: [
-      { method: 'setFont', value: 'Menlo-Bold' },
+      { method: 'setFont', value: '%bold%' },
       { method: 'setFontSize', value: 48 },
     ],
   },
@@ -88,7 +117,7 @@ export const parsers = [
     style: 'h4',
     matcher: /^####\s+(.*)/gm,
     transforms: [
-      { method: 'setFont', value: 'Menlo-Bold' },
+      { method: 'setFont', value: '%bold%' },
       { method: 'setFontSize', value: 44 },
     ],
   },
@@ -96,7 +125,7 @@ export const parsers = [
     style: 'h5',
     matcher: /^#####\s+(.*)/gm,
     transforms: [
-      { method: 'setFont', value: 'Menlo-Bold' },
+      { method: 'setFont', value: '%bold%' },
       { method: 'setFontSize', value: 42 },
     ],
   },
@@ -104,7 +133,7 @@ export const parsers = [
     style: 'h6',
     matcher: /^######\s+(.*)/gm,
     transforms: [
-      { method: 'setFont', value: 'Menlo-Bold' },
+      { method: 'setFont', value: '%bold%' },
       { method: 'setFontSize', value: 40 },
     ],
   },
@@ -120,6 +149,7 @@ export function createParsers(
     const customTransform = customParsers?.find(
       (ct) => ct.style === parser.style
     );
+    // if (customTransform) remove from customParers[] ?
     return {
       ...parser,
       transforms: customTransform
@@ -128,14 +158,16 @@ export function createParsers(
     } as Parser;
   });
 
+  // TODO: seems like we're adding customParers twice... see comment above
   return [...markdownParsers, ...((customParsers ?? []) as Parser[])];
 }
 
 export function createRender(
   cleanString: string,
   methods: Method[],
-  defaultStyles: Method[] = [
-    { method: 'setFont', args: ['Menlo-Regular'] },
+  fontMap: FontMap = fonts,
+  baseStyles: Method[] = [
+    { method: 'setFont', args: ['%regular%'] },
     { method: 'setFontSize', args: [40] },
   ]
 ) {
@@ -144,10 +176,12 @@ export function createRender(
 
   let expression = 'thisLayer.text.sourceText.createStyle()';
 
-  [...defaultStyles, ...methods].forEach(({ method, args }) => {
-    const argsString = args.map((arg) => JSON.stringify(arg)).join(', ');
-    expression += `.${method}(${argsString})`;
-  });
+  mapToFont([...baseStyles, ...methods], fontMap).forEach(
+    ({ method, args }) => {
+      const argsString = args.map((arg) => JSON.stringify(arg)).join(', ');
+      expression += `.${method}(${argsString})`;
+    }
+  );
 
   return () => eval(expression).setText(cleanString);
 }
