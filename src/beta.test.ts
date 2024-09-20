@@ -6,7 +6,7 @@ test('correctly create parsers', () => {
 this next word will be *bold*
 and this one will be _italic_
 
-## but check this one out:
+but check this one out:
 
 i will be ==highlighted==!!!`;
 
@@ -38,6 +38,28 @@ i will be highlighted!!!`);
     { method: 'setFont', args: ['Menlo-Italic', ...str(`italic`)] },
     { method: 'setFillColor', args: [[1, 1, 0, 1], ...str(`highlighted`)] },
   ]);
+});
+
+//
+
+test('correctly overwrites *bold* parser', () => {
+  const parsers = createParsers([
+    {
+      style: 'bold',
+      transforms: [{ method: 'setFillColor', value: [1, 1, 0, 1] }],
+    },
+    {
+      style: 'italic',
+      matcher: /==(.+?)==/g, // TODO: do we want to allow user to overwrite standard markdown matchers?
+      transforms: [{ method: 'setFillColor', value: [1, 1, 0, 1] }],
+    },
+  ]);
+
+  expect(parsers.find((p) => p.style === 'bold')).toEqual({
+    style: 'bold',
+    matcher: /\*(.*?)\*/g,
+    transforms: [{ method: 'setFillColor', value: [1, 1, 0, 1] }],
+  });
 });
 
 //

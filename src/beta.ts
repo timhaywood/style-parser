@@ -49,69 +49,73 @@ export function parseMarkdown(
   return { cleaned, methods };
 }
 
-// TODO: be sure that custom parsers overwrite default parser...
-export function createParsers(customParsers?: Parser[]): Parser[] {
-  const parsers: Parser[] = [
-    {
-      style: 'bold',
-      matcher: /\*(.*?)\*/g,
-      transforms: [{ method: 'setFont', value: 'Menlo-Bold' }],
-    },
-    {
-      style: 'italic',
-      matcher: /_(.*?)_/g,
-      transforms: [{ method: 'setFont', value: 'Menlo-Italic' }],
-    },
-    {
-      style: 'h1',
-      matcher: /^#\s+(.*)/gm,
-      transforms: [
-        { method: 'setFont', value: 'Menlo-Bold' },
-        { method: 'setFontSize', value: 72 },
-      ],
-    },
-    {
-      style: 'h2',
-      matcher: /^##\s+(.*)/gm,
-      transforms: [
-        { method: 'setFont', value: 'Menlo-Bold' },
-        { method: 'setFontSize', value: 60 },
-      ],
-    },
-    {
-      style: 'h3',
-      matcher: /^###\s+(.*)/gm,
-      transforms: [
-        { method: 'setFont', value: 'Menlo-Bold' },
-        { method: 'setFontSize', value: 48 },
-      ],
-    },
-    {
-      style: 'h4',
-      matcher: /^####\s+(.*)/gm,
-      transforms: [
-        { method: 'setFont', value: 'Menlo-Bold' },
-        { method: 'setFontSize', value: 44 },
-      ],
-    },
-    {
-      style: 'h5',
-      matcher: /^#####\s+(.*)/gm,
-      transforms: [
-        { method: 'setFont', value: 'Menlo-Bold' },
-        { method: 'setFontSize', value: 42 },
-      ],
-    },
-    {
-      style: 'h6',
-      matcher: /^######\s+(.*)/gm,
-      transforms: [
-        { method: 'setFont', value: 'Menlo-Bold' },
-        { method: 'setFontSize', value: 40 },
-      ],
-    },
-  ];
+export const parsers = [
+  {
+    style: 'bold',
+    matcher: /\*(.*?)\*/g,
+    transforms: [{ method: 'setFont', value: 'Menlo-Bold' }],
+  },
+  {
+    style: 'italic',
+    matcher: /_(.*?)_/g,
+    transforms: [{ method: 'setFont', value: 'Menlo-Italic' }],
+  },
+  {
+    style: 'h1',
+    matcher: /^#\s+(.*)/gm,
+    transforms: [
+      { method: 'setFont', value: 'Menlo-Bold' },
+      { method: 'setFontSize', value: 72 },
+    ],
+  },
+  {
+    style: 'h2',
+    matcher: /^##\s+(.*)/gm,
+    transforms: [
+      { method: 'setFont', value: 'Menlo-Bold' },
+      { method: 'setFontSize', value: 60 },
+    ],
+  },
+  {
+    style: 'h3',
+    matcher: /^###\s+(.*)/gm,
+    transforms: [
+      { method: 'setFont', value: 'Menlo-Bold' },
+      { method: 'setFontSize', value: 48 },
+    ],
+  },
+  {
+    style: 'h4',
+    matcher: /^####\s+(.*)/gm,
+    transforms: [
+      { method: 'setFont', value: 'Menlo-Bold' },
+      { method: 'setFontSize', value: 44 },
+    ],
+  },
+  {
+    style: 'h5',
+    matcher: /^#####\s+(.*)/gm,
+    transforms: [
+      { method: 'setFont', value: 'Menlo-Bold' },
+      { method: 'setFontSize', value: 42 },
+    ],
+  },
+  {
+    style: 'h6',
+    matcher: /^######\s+(.*)/gm,
+    transforms: [
+      { method: 'setFont', value: 'Menlo-Bold' },
+      { method: 'setFontSize', value: 40 },
+    ],
+  },
+] as const;
 
+type MarkdownStyle = typeof parsers[number]['style'];
+type MarkdownParser = Omit<Parser, 'matcher'> & { style: MarkdownStyle };
+
+export function createParsers(
+  customParsers?: (Parser | MarkdownParser)[]
+): Parser[] {
   const markdownParsers = parsers.map((parser) => {
     const customTransform = customParsers?.find(
       (ct) => ct.style === parser.style
@@ -121,10 +125,10 @@ export function createParsers(customParsers?: Parser[]): Parser[] {
       transforms: customTransform
         ? customTransform.transforms
         : parser.transforms,
-    };
+    } as Parser;
   });
 
-  return [...markdownParsers, ...(customParsers ?? [])];
+  return [...markdownParsers, ...((customParsers ?? []) as Parser[])];
 }
 
 export function createRender(
@@ -147,24 +151,3 @@ export function createRender(
 
   return () => eval(expression).setText(cleanString);
 }
-
-// // Example usage
-// const markdown = `
-// # Heading 1
-// This is a *bold* text and _italic_ text.
-// ## Heading 2
-// `;
-
-const customTransforms = [
-  {
-    style: 'highlight',
-    matcher: /==(.+?)==/g,
-    transforms: [
-      { method: 'setFillColor', value: [1, 1, 0, 1] }, // Yellow background
-    ],
-  },
-] as Parser[];
-
-// const parsers = createParsers(customTransforms);
-// const methods = parseMarkdown(markdown, parsers);
-// createTextDocument(markdown, methods);
