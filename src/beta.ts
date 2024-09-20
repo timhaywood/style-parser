@@ -64,7 +64,7 @@ export function createParsers(customParsers?: Parser[]): Parser[] {
     },
     {
       style: 'h1',
-      matcher: /^#\s+(.*)/g,
+      matcher: /^#\s+(.*)/gm,
       transforms: [
         { method: 'setFont', value: 'Menlo-Bold' },
         { method: 'setFontSize', value: 72 },
@@ -72,7 +72,7 @@ export function createParsers(customParsers?: Parser[]): Parser[] {
     },
     {
       style: 'h2',
-      matcher: /^##\s+(.*)/g,
+      matcher: /^##\s+(.*)/gm,
       transforms: [
         { method: 'setFont', value: 'Menlo-Bold' },
         { method: 'setFontSize', value: 60 },
@@ -80,7 +80,7 @@ export function createParsers(customParsers?: Parser[]): Parser[] {
     },
     {
       style: 'h3',
-      matcher: /^###\s+(.*)/g,
+      matcher: /^###\s+(.*)/gm,
       transforms: [
         { method: 'setFont', value: 'Menlo-Bold' },
         { method: 'setFontSize', value: 48 },
@@ -88,7 +88,7 @@ export function createParsers(customParsers?: Parser[]): Parser[] {
     },
     {
       style: 'h4',
-      matcher: /^####\s+(.*)/g,
+      matcher: /^####\s+(.*)/gm,
       transforms: [
         { method: 'setFont', value: 'Menlo-Bold' },
         { method: 'setFontSize', value: 44 },
@@ -96,7 +96,7 @@ export function createParsers(customParsers?: Parser[]): Parser[] {
     },
     {
       style: 'h5',
-      matcher: /^#####\s+(.*)/g,
+      matcher: /^#####\s+(.*)/gm,
       transforms: [
         { method: 'setFont', value: 'Menlo-Bold' },
         { method: 'setFontSize', value: 42 },
@@ -104,7 +104,7 @@ export function createParsers(customParsers?: Parser[]): Parser[] {
     },
     {
       style: 'h6',
-      matcher: /^######\s+(.*)/g,
+      matcher: /^######\s+(.*)/gm,
       transforms: [
         { method: 'setFont', value: 'Menlo-Bold' },
         { method: 'setFontSize', value: 40 },

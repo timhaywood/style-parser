@@ -6,7 +6,7 @@ test('correctly create parsers', () => {
 this next word will be *bold*
 and this one will be _italic_
 
-but check this one out:
+## but check this one out:
 
 i will be ==highlighted==!!!`;
 
