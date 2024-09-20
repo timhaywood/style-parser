@@ -4,7 +4,7 @@ import afterEffectJsx from 'rollup-plugin-ae-jsx';
 import pkg from './package.json';
 
 export default {
-  input: 'src/index.ts',
+  input: 'src/beta.ts',
   output: {
     file: pkg.main,
     format: 'cjs',
@@ -18,13 +18,7 @@ export default {
         _npmVersion: pkg.version,
       },
     }),
-    typescript({
-      module: 'esnext',
-      target: 'esnext',
-      noImplicitAny: true,
-      moduleResolution: 'node',
-      strict: true,
-    }),
+    typescript(),
     afterEffectJsx(),
   ],
 };
