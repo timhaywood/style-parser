@@ -1,33 +1,35 @@
 export const version: string = '_npmVersion';
 
 import { Layer } from 'expression-globals-typescript';
-
-type Parser = { style: string; matcher: RegExp; transforms: Transform[] };
-type Transform = { method: string; value: any };
-type Method = { method: string; args: any[] };
+import {
+  StyleMethod,
+  Style,
+  StyleDefinition,
+  Transform,
+  Parser,
+  MarkdownParser,
+} from './types';
+import { parsers } from './parsers';
 
 type Options = {
   markdown: string;
   parsers: Parser[];
   fontMap: FontMap;
-  baseStyles: Method[];
+  baseStyles: StyleDefinition;
 };
 
-export function parse({
-  markdown,
-  parsers,
-  fontMap = fonts,
-  baseStyles,
-}: Options) {
-  const _parsers = createParsers(parsers);
-  const { cleaned, methods } = parseMarkdown(markdown, _parsers);
-  return createRender(cleaned, methods, fontMap, baseStyles);
+//
+
+export function parse({ markdown, parsers, fontMap, baseStyles }: Options) {
+  const allParsers = createParsers(parsers);
+  const { cleaned, transforms } = parseMarkdown(markdown, allParsers);
+  return createRender(cleaned, transforms, fontMap, baseStyles);
 }
 
 export function parseMarkdown(
   markdown: string,
   parsers: Parser[] = createParsers()
-): { cleaned: string; methods: Method[] } {
+) {
   const allMatches: { match: RegExpExecArray; parser: Parser }[] = [];
 
   parsers.forEach((parser) => {
@@ -39,144 +41,69 @@ export function parseMarkdown(
 
   let cleaned = markdown;
   let removedChars = 0;
-  const methods: Method[] = [];
+  const transforms: Transform<any>[] = [];
 
   allMatches.forEach(({ match, parser }) => {
     const start = match.index!;
     const rawMatch = match[0];
     const content = match[1];
 
-    parser.transforms.forEach((transform) => {
-      methods.push({
-        method: transform.method,
-        args: [transform.value, start - removedChars, content.length],
+    for (const style in parser.styles) {
+      let value = replaceFont(parser.styles[style as Style]);
+      transforms.push({
+        method: styleToStyleMethod(style as Style),
+        args: [value, start - removedChars, content.length],
       });
-    });
+    }
 
     removedChars += rawMatch.length - content.length;
     cleaned = cleaned.replace(rawMatch, content);
   });
 
-  return { cleaned, methods };
+  return { cleaned, transforms };
 }
 
-type FontMap = Record<'regular' | 'bold' | 'italic', string>;
+export function createParsers(customParsers: (Parser | MarkdownParser)[] = []) {
+  const markdown = parsers.map((parser) => {
+    const custom = customParsers.find((ct) => ct.name === parser.name);
+    return {
+      ...parser,
+      styles: custom ? custom.styles : parser.styles,
+    } as Parser;
+  });
+
+  const filtered = customParsers.filter(
+    (customParser) => !markdown.some((mp) => mp.name === customParser.name)
+  ) as Parser[];
+
+  return [...markdown, ...filtered];
+}
+
+type Font = 'regular' | 'bold' | 'italic';
+type FontMap = Record<Font, string>;
+
 export const fonts: FontMap = {
   regular: 'Menlo-Regular', // 'CascadiaCode-Regular',
   bold: 'Menlo-Bold', // 'CascadiaCodeRoman-Bold',
   italic: 'Menlo-Italic', // 'CascadiaCode-Italic',
 };
 
-function mapToFont(methods: Method[], fonts: FontMap) {
-  for (const method of methods) {
-    method.args = method.args.map((a) =>
-      typeof a === 'string'
-        ? a.replace(/%(\w+)%/, (_, key) => fonts[key as keyof typeof fonts])
-        : a
-    );
-  }
-  return methods;
-}
-
-export const parsers = [
-  {
-    style: 'bold',
-    matcher: /\*(.*?)\*/g,
-    transforms: [{ method: 'setFont', value: '%bold%' }],
-  },
-  {
-    style: 'italic',
-    matcher: /_(.*?)_/g,
-    transforms: [{ method: 'setFont', value: '%italic%' }],
-  },
-  {
-    style: 'h1',
-    matcher: /^#\s+(.*)/gm,
-    transforms: [
-      { method: 'setFont', value: '%bold%' },
-      { method: 'setFontSize', value: 72 },
-    ],
-  },
-  {
-    style: 'h2',
-    matcher: /^##\s+(.*)/gm,
-    transforms: [
-      { method: 'setFont', value: '%bold%' },
-      { method: 'setFontSize', value: 60 },
-    ],
-  },
-  {
-    style: 'h3',
-    matcher: /^###\s+(.*)/gm,
-    transforms: [
-      { method: 'setFont', value: '%bold%' },
-      { method: 'setFontSize', value: 48 },
-    ],
-  },
-  {
-    style: 'h4',
-    matcher: /^####\s+(.*)/gm,
-    transforms: [
-      { method: 'setFont', value: '%bold%' },
-      { method: 'setFontSize', value: 44 },
-    ],
-  },
-  {
-    style: 'h5',
-    matcher: /^#####\s+(.*)/gm,
-    transforms: [
-      { method: 'setFont', value: '%bold%' },
-      { method: 'setFontSize', value: 42 },
-    ],
-  },
-  {
-    style: 'h6',
-    matcher: /^######\s+(.*)/gm,
-    transforms: [
-      { method: 'setFont', value: '%bold%' },
-      { method: 'setFontSize', value: 40 },
-    ],
-  },
-] as const;
-
-type MarkdownStyle = typeof parsers[number]['style'];
-type MarkdownParser = Omit<Parser, 'matcher'> & { style: MarkdownStyle };
-
-export function createParsers(
-  customParsers?: (Parser | MarkdownParser)[]
-): Parser[] {
-  const markdownParsers = parsers.map((parser) => {
-    const customTransform = customParsers?.find(
-      (ct) => ct.style === parser.style
-    );
-    // if (customTransform) remove from customParers[] ?
-    return {
-      ...parser,
-      transforms: customTransform
-        ? customTransform.transforms
-        : parser.transforms,
-    } as Parser;
-  });
-
-  // TODO: seems like we're adding customParers twice... see comment above
-  return [...markdownParsers, ...((customParsers ?? []) as Parser[])];
-}
-
 export function createRender(
   cleanString: string,
-  methods: Method[],
-  fontMap: FontMap = fonts,
-  baseStyles: Method[] = [
-    { method: 'setFont', args: ['%regular%'] },
-    { method: 'setFontSize', args: [40] },
-  ]
+  transforms: Transform<any>[],
+  fontMap: FontMap,
+  baseStyles: StyleDefinition = {
+    font: '%regular%',
+    fontSize: 40,
+  }
 ) {
   const thisLayer = new Layer();
   if (!thisLayer.text) throw `${thisLayer.name} is not a TextLayer!`;
 
+  const baseTransforms = styleToTransform(baseStyles);
   let expression = 'thisLayer.text.sourceText.createStyle()';
 
-  mapToFont([...baseStyles, ...methods], fontMap).forEach(
+  mapToFont([...baseTransforms, ...transforms], fontMap).forEach(
     ({ method, args }) => {
       const argsString = args.map((arg) => JSON.stringify(arg)).join(', ');
       expression += `.${method}(${argsString})`;
@@ -184,4 +111,33 @@ export function createRender(
   );
 
   return () => eval(expression).setText(cleanString);
+}
+
+//
+
+function replaceFont(arg: any, fontMap: FontMap = fonts) {
+  return typeof arg === 'string'
+    ? arg.replace(/%(\w+)%/, (_, key) => fontMap[key as keyof typeof fontMap])
+    : arg;
+}
+
+function mapToFont(transforms: Transform<any>[], fontMap: FontMap) {
+  for (const transform of transforms) {
+    transform.args = transform.args.map((a) =>
+      replaceFont(a, fontMap)
+    ) as Transform<any>['args'];
+  }
+  return transforms;
+}
+
+function styleToStyleMethod(style: Style) {
+  const upper = style.charAt(0).toUpperCase();
+  return `set${upper}${style.slice(1)}` as StyleMethod;
+}
+
+function styleToTransform(style: StyleDefinition) {
+  return Object.entries(style).flatMap(([style, value]) => {
+    const method = styleToStyleMethod(style as Style);
+    return value !== undefined ? [{ method, args: [value] }] : [];
+  }) as Transform<any>[];
 }

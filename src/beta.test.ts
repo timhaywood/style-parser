@@ -12,13 +12,13 @@ i will be ==highlighted==!!!`;
 
   const parsers = createParsers([
     {
-      style: 'highlight',
+      name: 'highlight',
       matcher: /==(.+?)==/g,
-      transforms: [{ method: 'setFillColor', value: [1, 1, 0, 1] }],
+      styles: { fillColor: [1, 1, 0] },
     },
   ]);
 
-  const { cleaned, methods } = parseMarkdown(markdown, parsers);
+  const { cleaned, transforms } = parseMarkdown(markdown, parsers);
 
   expect(cleaned).toBe(`hello!
 
@@ -31,12 +31,12 @@ i will be highlighted!!!`);
 
   const str = (v: string) => [cleaned.indexOf(v), v.length];
 
-  expect(methods).toStrictEqual([
+  expect(transforms).toStrictEqual([
     { method: 'setFont', args: ['Menlo-Bold', ...str(`hello!`)] },
     { method: 'setFontSize', args: [72, ...str(`hello!`)] },
     { method: 'setFont', args: ['Menlo-Bold', ...str(`bold`)] },
     { method: 'setFont', args: ['Menlo-Italic', ...str(`italic`)] },
-    { method: 'setFillColor', args: [[1, 1, 0, 1], ...str(`highlighted`)] },
+    { method: 'setFillColor', args: [[1, 1, 0], ...str(`highlighted`)] },
   ]);
 });
 
@@ -45,20 +45,20 @@ i will be highlighted!!!`);
 test('correctly overwrites *bold* parser', () => {
   const parsers = createParsers([
     {
-      style: 'bold',
-      transforms: [{ method: 'setFillColor', value: [1, 1, 0, 1] }],
+      name: 'bold',
+      styles: { fillColor: [1, 1, 0] },
     },
     {
-      style: 'italic',
+      name: 'italic',
       matcher: /==(.+?)==/g, // TODO: do we want to allow user to overwrite standard markdown matchers?
-      transforms: [{ method: 'setFillColor', value: [1, 1, 0, 1] }],
+      styles: { fillColor: [1, 1, 0] },
     },
   ]);
 
-  expect(parsers.find((p) => p.style === 'bold')).toEqual({
+  expect(parsers.find((p) => p.name === 'bold')).toEqual({
     style: 'bold',
     matcher: /\*(.*?)\*/g,
-    transforms: [{ method: 'setFillColor', value: [1, 1, 0, 1] }],
+    styles: { fillColor: [1, 1, 0] },
   });
 });
 
@@ -70,17 +70,17 @@ test.skip('correctly create parsers', () => {
     {
       style: 'bold',
       matcher: /\*(.*?)\*/g,
-      transforms: [{ method: 'setFont', value: 'Menlo-Bold' }],
+      styles: { font: 'Menlo-Bold' },
     },
     {
       style: 'italic',
       matcher: /_(.*?)_/g,
-      transforms: [{ method: 'setFont', value: 'Menlo-Italic' }],
+      styles: { font: 'Menlo-Italic' },
     },
   ]);
 });
 
-test.skip('correctly parses styles', () => {
+test('correctly parses styles', () => {
   const { cleaned } = parseMarkdown(
     `This should be *bold* and this should be _italic_`,
     createParsers()
@@ -91,13 +91,13 @@ test.skip('correctly parses styles', () => {
   );
 });
 
-test.skip('correctly parses methods', () => {
-  const { methods } = parseMarkdown(
+test('correctly parses methods', () => {
+  const { transforms } = parseMarkdown(
     `This should be *bold* and this should be _italic_`,
     createParsers()
   );
 
-  expect(methods).toStrictEqual([
+  expect(transforms).toStrictEqual([
     { method: 'setFont', args: ['Menlo-Bold', 15, 4] },
     { method: 'setFont', args: ['Menlo-Italic', 39, 6] },
   ]);
