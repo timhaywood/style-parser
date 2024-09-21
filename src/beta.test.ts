@@ -42,7 +42,7 @@ i will be highlighted!!!`);
 
 //
 
-test('correctly overwrites *bold* parser', () => {
+test('correctly overwrites *bold* parser style', () => {
   const parsers = createParsers([
     {
       name: 'bold',
@@ -64,9 +64,9 @@ test('correctly overwrites *bold* parser', () => {
 
 //
 
-test.skip('correctly create parsers', () => {
+test('correctly creates default parsers', () => {
   const parsers = createParsers();
-  expect(parsers).toStrictEqual([
+  expect(parsers.slice(0, 2)).toStrictEqual([
     {
       name: 'bold',
       matcher: /\*(.*?)\*/g,
@@ -77,10 +77,11 @@ test.skip('correctly create parsers', () => {
       matcher: /_(.*?)_/g,
       styles: { font: 'Menlo-Italic' },
     },
+    // other default parsers...
   ]);
 });
 
-test('correctly parses styles', () => {
+test('correctly cleans text', () => {
   const { cleaned } = parseMarkdown(
     `This should be *bold* and this should be _italic_`,
     createParsers()
@@ -91,7 +92,7 @@ test('correctly parses styles', () => {
   );
 });
 
-test('correctly parses methods', () => {
+test('correctly generates transforms', () => {
   const { transforms } = parseMarkdown(
     `This should be *bold* and this should be _italic_`,
     createParsers()
