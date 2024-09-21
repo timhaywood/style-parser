@@ -56,7 +56,7 @@ test('correctly overwrites *bold* parser', () => {
   ]);
 
   expect(parsers.find((p) => p.name === 'bold')).toEqual({
-    style: 'bold',
+    name: 'bold',
     matcher: /\*(.*?)\*/g,
     styles: { fillColor: [1, 1, 0] },
   });
@@ -68,12 +68,12 @@ test.skip('correctly create parsers', () => {
   const parsers = createParsers();
   expect(parsers).toStrictEqual([
     {
-      style: 'bold',
+      name: 'bold',
       matcher: /\*(.*?)\*/g,
       styles: { font: 'Menlo-Bold' },
     },
     {
-      style: 'italic',
+      name: 'italic',
       matcher: /_(.*?)_/g,
       styles: { font: 'Menlo-Italic' },
     },
