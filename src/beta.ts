@@ -13,9 +13,9 @@ import { parsers } from './parsers';
 
 type Options = {
   markdown: string;
-  parsers: Parser[];
-  fontMap: FontMap;
-  baseStyles: StyleDefinition;
+  parsers?: Parser[];
+  fontMap?: FontMap;
+  baseStyles?: StyleDefinition;
 };
 
 //
@@ -91,7 +91,7 @@ export const fonts: FontMap = {
 export function createRender(
   cleanString: string,
   transforms: Transform<any>[],
-  fontMap: FontMap,
+  fontMap: FontMap = fonts,
   baseStyles: StyleDefinition = {
     font: '%regular%',
     fontSize: 40,
