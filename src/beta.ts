@@ -101,16 +101,16 @@ export function createRender(
   if (!thisLayer.text) throw `${thisLayer.name} is not a TextLayer!`;
 
   const baseTransforms = styleToTransform(baseStyles);
-  let expression = 'thisLayer.text.sourceText.createStyle()';
+  const allTransforms = mapToFont([...baseTransforms, ...transforms], fontMap);
+  const style = thisLayer.text.sourceText.createStyle();
 
-  mapToFont([...baseTransforms, ...transforms], fontMap).forEach(
-    ({ method, args }) => {
-      const argsString = args.map((arg) => JSON.stringify(arg)).join(', ');
-      expression += `.${method}(${argsString})`;
-    }
-  );
-
-  return () => eval(expression).setText(cleanString);
+  return () =>
+    allTransforms
+      .reduce((expression, { method, args }) => {
+        // @ts-expect-error "Expected 1 arguments, but got 3.ts(2554)" (new AE API expects 3 arguments)
+        return expression[method as StyleMethod](...args);
+      }, style)
+      .setText(cleanString);
 }
 
 //
