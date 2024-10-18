@@ -106,9 +106,9 @@ export function createRender(
 
   return () =>
     allTransforms
-      .reduce((expression, { method, args }) => {
+      .reduce((textStyle, { method, args }) => {
         // @ts-expect-error "Expected 1 arguments, but got 3.ts(2554)" (new AE API expects 3 arguments)
-        return expression[method as StyleMethod](...args);
+        return textStyle[method as StyleMethod](...args);
       }, style)
       .setText(cleanString);
 }
