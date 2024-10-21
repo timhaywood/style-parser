@@ -1,6 +1,6 @@
 import typescript from '@rollup/plugin-typescript';
 import replace from '@rollup/plugin-replace';
-import afterEffectsJsx from './rollup-plugin/jsx';
+import afterEffectsJsx from 'rollup-plugin-ae-jsx';
 import pkg from './package.json';
 
 export default {
