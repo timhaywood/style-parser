@@ -4,7 +4,7 @@ import afterEffectsJsx from 'rollup-plugin-ae-jsx';
 import pkg from './package.json';
 
 export default {
-  input: 'src/beta.ts',
+  input: 'src/index.ts',
   output: {
     file: pkg.main,
     format: 'cjs',
