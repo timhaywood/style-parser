@@ -1,155 +1,143 @@
-type ParsedSection = {
-  content: string;
-  style: string;
-  line: number;
+export const version: string = '_npmVersion';
+
+import { Layer } from 'expression-globals-typescript';
+import {
+  StyleMethod,
+  Style,
+  StyleDefinition,
+  Transform,
+  Parser,
+  MarkdownParser,
+} from './types';
+import { parsers } from './parsers';
+
+type Options = {
+  markdown: string;
+  parsers?: Parser[];
+  fontMap?: FontMap;
+  baseStyles?: StyleDefinition;
 };
 
-function parseStyles(
-  inputText: string,
-  customParsers: Array<{ matcher: RegExp; stylename: string }> = []
-): ParsedSection[] {
-  /** Split the input text into an array of lines */
-  const inputLines = inputText.split(/[\r\n\3]/g);
+//
 
-  /** Creates a function that turns lines into a style tree based on a given regex */
-  function createLineParser(matcher: RegExp, stylename: string) {
-    return (line: string | ParsedSection | ParsedSection[], index: number) => {
-      // Section has already been parsed
-      if (typeof line !== 'string') return line;
-      const captureGroups = matcher.exec(line);
-      // Line doesn't contain matching styles, return as is
-      if (!captureGroups) return line;
-
-      // Return parsed styles
-      return (
-        line
-          // Split by the style regex
-          .split(matcher)
-          .map((section) => {
-            // Remove whitespace
-            const content = section.trim();
-            // If the content is empty, return null so we can filter it out
-            if (content === '') return null;
-            // The content is what matched the regex, it's the styled content
-            if (content === captureGroups[1]) {
-              return { line: index, content, style: stylename };
-            }
-            // It's unstyled
-            return { line: index, content, style: 'regular' };
-          })
-          .filter(Boolean) as ParsedSection[]
-      );
-    };
-  }
-
-  const parsers = [
-    ...customParsers,
-    { stylename: 'bold', matcher: new RegExp(/\*(.*)\*/) },
-    { stylename: 'italics', matcher: new RegExp(/_(.*)_/) },
-  ];
-
-  // Parse all the styles
-  let styles = inputLines;
-  for (const { matcher, stylename } of parsers) {
-    const parser = createLineParser(matcher, stylename);
-    styles = styles.map(parser);
-  }
-
-  const parsedStyles = styles.map((line, index) =>
-    typeof line === 'string'
-      ? [{ content: line, style: 'regular', line: index }]
-      : line
-  );
-
-  return parsedStyles.flat();
+export function parse({ markdown, parsers, fontMap, baseStyles }: Options) {
+  const allParsers = createParsers(parsers);
+  const { cleaned, transforms } = parseMarkdown(markdown, allParsers);
+  return createRender(cleaned, transforms, fontMap, baseStyles);
 }
 
-function styleByIndex(
-  inputText: string,
-  {
-    boldIndexes,
-    italicsIndexes,
-  }: { boldIndexes: number[]; italicsIndexes: number[] }
-): ParsedSection[] {
-  const inputLines = inputText.split(/[\r\n\3]/g);
-  const words = inputLines.flatMap((line, index) =>
-    line
-      .trim()
-      .split(' ')
-      .map((word) => ({ content: word, line: index }))
-  );
+export function parseMarkdown(
+  markdown: string,
+  parsers: Parser[] = createParsers()
+) {
+  const allMatches: { match: RegExpExecArray; parser: Parser }[] = [];
 
-  const wordsWithStyles = words.map((word, index) => {
-    let style = 'regular';
-    if (boldIndexes.includes(index)) style = 'bold';
-    if (italicsIndexes.includes(index)) style = 'italics';
-    return {
-      ...word,
-      style,
-    };
+  parsers.forEach((parser) => {
+    const matches = [...markdown.matchAll(parser.matcher)];
+    allMatches.push(...matches.map((match) => ({ match, parser })));
   });
 
-  return wordsWithStyles;
-}
+  allMatches.sort((a, b) => a.match.index - b.match.index);
 
-function styleBySearch(
-  inputText: string,
-  {
-    boldString,
-    italicsString,
-  }: { boldString?: string; italicsString?: string } = {}
-): ParsedSection[] {
-  let regex;
-  const italics = italicsString ? italicsString.trim() : '';
-  const bold = boldString ? boldString.trim() : '';
-  if (boldString && italicsString) {
-    regex = new RegExp(`(${bold})|(${italics})`, 'g');
-  } else if (boldString) {
-    regex = new RegExp(`(${bold})`, 'g');
-  } else if (italicsString) {
-    regex = new RegExp(`(${italics})`, 'g');
-  }
+  let cleaned = markdown;
+  let removedChars = 0;
+  const transforms: Transform<any>[] = [];
 
-  if (!regex) {
-    return [
-      {
-        content: inputText,
-        style: 'regular',
-        line: 0,
-      },
-    ];
-  }
+  allMatches.forEach(({ match, parser }) => {
+    const start = match.index!;
+    const rawMatch = match[0];
+    const content = match[1];
 
-  const inputLines = inputText.split(/[\r\n\3]/g);
-
-  return inputLines.flatMap((line, index) => {
-    return line
-      .split(regex)
-      .filter(Boolean)
-      .map((part) => {
-        const style =
-          part === boldString
-            ? 'bold'
-            : part === italicsString
-            ? 'italics'
-            : 'regular';
-        return {
-          content: part.trim(),
-          style,
-          line: index,
-        };
+    for (const style in parser.styles) {
+      let value = replaceFont(parser.styles[style as Style]);
+      transforms.push({
+        method: styleToStyleMethod(style as Style),
+        args: [value, start - removedChars, content.length],
       });
+    }
+
+    removedChars += rawMatch.length - content.length;
+    cleaned = cleaned.replace(rawMatch, content);
   });
+
+  return { cleaned, transforms };
 }
 
-const defaultFontMap = {
-  bold: 'Arial-BoldMT',
-  italics: 'Arial-ItalicMT',
+export function createParsers(customParsers: (Parser | MarkdownParser)[] = []) {
+  const markdown = parsers.map((parser) => {
+    const custom = customParsers.find((ct) => ct.name === parser.name);
+    return {
+      ...parser,
+      styles: custom ? custom.styles : parser.styles,
+    } as Parser;
+  });
+
+  const filtered = customParsers.filter(
+    (customParser) => !markdown.some((mp) => mp.name === customParser.name)
+  ) as Parser[];
+
+  return [...markdown, ...filtered];
+}
+
+type Font = 'regular' | 'bold' | 'italic';
+type FontMap = Record<Font, string>;
+
+export const fonts: FontMap = {
+  regular: 'Menlo-Regular', // 'CascadiaCode-Regular',
+  bold: 'Menlo-Bold', // 'CascadiaCodeRoman-Bold',
+  italic: 'Menlo-Italic', // 'CascadiaCode-Italic',
 };
 
-// '_npmVersion' is replaced with value from package.json
-// during compilation
-const version: string = '_npmVersion';
+export function createRender(
+  cleanString: string,
+  transforms: Transform<any>[],
+  fontMap: FontMap = fonts,
+  baseStyles: StyleDefinition = {
+    font: '%regular%',
+    fontSize: 40,
+  }
+) {
+  const thisLayer = new Layer();
+  if (!thisLayer.text) throw `${thisLayer.name} is not a TextLayer!`;
 
-// Export values to appear in jsx files
-export { parseStyles, styleByIndex, styleBySearch, defaultFontMap, version };
+  const baseTransforms = styleToTransform(baseStyles);
+  const allTransforms = mapToFont([...baseTransforms, ...transforms], fontMap);
+  const style = thisLayer.text.sourceText.createStyle();
+
+  return () =>
+    allTransforms
+      .reduce((textStyle, { method, args }) => {
+        // @ts-expect-error "Expected 1 arguments, but got 3.ts(2554)" (new AE API expects 3 arguments)
+        return textStyle[method as StyleMethod](...args);
+      }, style)
+      .setText(cleanString);
+}
+
+//
+
+function replaceFont(arg: any, fontMap: FontMap = fonts) {
+  return typeof arg === 'string'
+    ? arg.replace(/%(\w+)%/, (_, key) => fontMap[key as keyof typeof fontMap])
+    : arg;
+}
+
+function mapToFont(transforms: Transform<any>[], fontMap: FontMap) {
+  for (const transform of transforms) {
+    transform.args = transform.args.map((a) =>
+      replaceFont(a, fontMap)
+    ) as Transform<any>['args'];
+  }
+  return transforms;
+}
+
+function styleToStyleMethod(style: Style) {
+  const upper = style.charAt(0).toUpperCase();
+  return `set${upper}${style.slice(1)}` as StyleMethod;
+}
+
+function styleToTransform(style: StyleDefinition) {
+  return Object.entries(style).flatMap(([style, value]) => {
+    const method = styleToStyleMethod(style as Style);
+    return value !== undefined ? [{ method, args: [value] }] : [];
+  }) as Transform<any>[];
+}

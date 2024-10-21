@@ -1,4 +1,4 @@
-import { createParsers, parseMarkdown } from './beta';
+import { createParsers, parseMarkdown } from '.';
 
 test('correctly create parsers', () => {
   const markdown = `# hello!
