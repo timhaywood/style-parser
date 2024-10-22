@@ -1,29 +1,17 @@
 export const version: string = '_npmVersion';
 
 import { Layer } from 'expression-globals-typescript';
-import {
-  StyleMethod,
-  Style,
-  StyleDefinition,
-  Transform,
-  Parser,
-  MarkdownParser,
-} from './types';
 import { parsers } from './parsers';
+import { MarkdownParser, Parser, Style, StyleMethod, Transform } from './types';
 
-type Options = {
-  markdown: string;
-  parsers?: Parser[];
-  fontMap?: FontMap;
-  baseStyles?: StyleDefinition;
-};
+const thisLayer = new Layer();
 
 //
 
-export function parse({ markdown, parsers, fontMap, baseStyles }: Options) {
-  const allParsers = createParsers(parsers);
+export function parse(markdown: string, customParsers?: Parser[]) {
+  const allParsers = createParsers(customParsers);
   const { cleaned, transforms } = parseMarkdown(markdown, allParsers);
-  return createRender(cleaned, transforms, fontMap, baseStyles);
+  return createRender(cleaned, transforms);
 }
 
 export function parseMarkdown(
@@ -49,7 +37,7 @@ export function parseMarkdown(
     const content = match[1];
 
     for (const style in parser.styles) {
-      let value = replaceFont(parser.styles[style as Style]);
+      const value = parser.styles[style as Style];
       transforms.push({
         method: styleToStyleMethod(style as Style),
         args: [value, start - removedChars, content.length],
@@ -64,80 +52,45 @@ export function parseMarkdown(
 }
 
 export function createParsers(customParsers: (Parser | MarkdownParser)[] = []) {
-  const markdown = parsers.map((parser) => {
-    const custom = customParsers.find((ct) => ct.name === parser.name);
+  const mergedStyles = parsers.map((parser) => {
+    const custom = customParsers.find(
+      (customParser) => customParser.name === parser.name
+    );
     return {
-      ...parser,
-      styles: custom ? custom.styles : parser.styles,
+      name: parser.name,
+      // Override default matchers with custom ones if present
+      matcher: custom && 'matcher' in custom ? custom.matcher : parser.matcher,
+      // Merge custom styles with default ones
+      styles: custom ? { ...parser.styles, ...custom.styles } : parser.styles,
     } as Parser;
   });
 
-  const filtered = customParsers.filter(
-    (customParser) => !markdown.some((mp) => mp.name === customParser.name)
+  const customStyles = customParsers.filter(
+    (customParser) => !mergedStyles.some((mp) => mp.name === customParser.name)
   ) as Parser[];
 
-  return [...markdown, ...filtered];
+  return [...mergedStyles, ...customStyles];
 }
-
-type Font = 'regular' | 'bold' | 'italic';
-type FontMap = Record<Font, string>;
-
-export const fonts: FontMap = {
-  regular: 'Menlo-Regular', // 'CascadiaCode-Regular',
-  bold: 'Menlo-Bold', // 'CascadiaCodeRoman-Bold',
-  italic: 'Menlo-Italic', // 'CascadiaCode-Italic',
-};
 
 export function createRender(
   cleanString: string,
-  transforms: Transform<any>[],
-  fontMap: FontMap = fonts,
-  baseStyles: StyleDefinition = {
-    font: '%regular%',
-    fontSize: 40,
-  }
+  transforms: Transform<any>[]
 ) {
-  const thisLayer = new Layer();
   if (!thisLayer.text) throw `${thisLayer.name} is not a TextLayer!`;
 
-  const baseTransforms = styleToTransform(baseStyles);
-  const allTransforms = mapToFont([...baseTransforms, ...transforms], fontMap);
-  const style = thisLayer.text.sourceText.createStyle();
+  const style = thisLayer.text.sourceText.style;
 
-  return () =>
-    allTransforms
-      .reduce((textStyle, { method, args }) => {
-        // @ts-expect-error "Expected 1 arguments, but got 3.ts(2554)" (new AE API expects 3 arguments)
-        return textStyle[method as StyleMethod](...args);
-      }, style)
-      .setText(cleanString);
+  return transforms
+    .reduce((textStyle, { method, args }) => {
+      // @ts-expect-error "Expected 1 arguments, but got 3.ts(2554)" (new AE API expects 3 arguments)
+      return textStyle[method as StyleMethod](...args);
+    }, style)
+    .setText(cleanString);
 }
 
 //
 
-function replaceFont(arg: any, fontMap: FontMap = fonts) {
-  return typeof arg === 'string'
-    ? arg.replace(/%(\w+)%/, (_, key) => fontMap[key as keyof typeof fontMap])
-    : arg;
-}
-
-function mapToFont(transforms: Transform<any>[], fontMap: FontMap) {
-  for (const transform of transforms) {
-    transform.args = transform.args.map((a) =>
-      replaceFont(a, fontMap)
-    ) as Transform<any>['args'];
-  }
-  return transforms;
-}
-
 function styleToStyleMethod(style: Style) {
   const upper = style.charAt(0).toUpperCase();
   return `set${upper}${style.slice(1)}` as StyleMethod;
-}
-
-function styleToTransform(style: StyleDefinition) {
-  return Object.entries(style).flatMap(([style, value]) => {
-    const method = styleToStyleMethod(style as Style);
-    return value !== undefined ? [{ method, args: [value] }] : [];
-  }) as Transform<any>[];
 }

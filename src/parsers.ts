@@ -1,23 +1,28 @@
+const defaultFonts = {
+  bold: 'Verdana-Bold',
+  italic: 'Verdana-Italic',
+} as const;
+
 export const parsers = [
   {
     name: 'bold',
     matcher: /\*(.*?)\*/g,
     styles: {
-      font: '%bold%',
+      font: defaultFonts.bold,
     },
   },
   {
     name: 'italic',
     matcher: /_(.*?)_/g,
     styles: {
-      font: '%italic%',
+      font: defaultFonts.italic,
     },
   },
   {
     name: 'h1',
     matcher: /^#\s+(.*)/gm,
     styles: {
-      font: '%bold%',
+      font: defaultFonts.bold,
       fontSize: 72,
     },
   },
@@ -25,7 +30,7 @@ export const parsers = [
     name: 'h2',
     matcher: /^##\s+(.*)/gm,
     styles: {
-      font: '%bold%',
+      font: defaultFonts.bold,
       fontSize: 60,
     },
   },
@@ -33,7 +38,7 @@ export const parsers = [
     name: 'h3',
     matcher: /^###\s+(.*)/gm,
     styles: {
-      font: '%bold%',
+      font: defaultFonts.bold,
       fontSize: 48,
     },
   },
@@ -41,7 +46,7 @@ export const parsers = [
     name: 'h4',
     matcher: /^####\s+(.*)/gm,
     styles: {
-      font: '%bold%',
+      font: defaultFonts.bold,
       fontSize: 44,
     },
   },
@@ -49,7 +54,7 @@ export const parsers = [
     name: 'h5',
     matcher: /^#####\s+(.*)/gm,
     styles: {
-      font: '%bold%',
+      font: defaultFonts.bold,
       fontSize: 42,
     },
   },
@@ -57,7 +62,7 @@ export const parsers = [
     name: 'h6',
     matcher: /^######\s+(.*)/gm,
     styles: {
-      font: '%bold%',
+      font: defaultFonts.bold,
       fontSize: 40,
     },
   },
