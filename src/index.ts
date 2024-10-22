@@ -21,8 +21,10 @@ export function parseMarkdown(
   const allMatches: { match: RegExpExecArray; parser: Parser }[] = [];
 
   parsers.forEach((parser) => {
-    const matches = [...markdown.matchAll(parser.matcher)];
-    allMatches.push(...matches.map((match) => ({ match, parser })));
+    const matches = [...markdown.matchAll(parser.matcher)]
+      .filter((match): match is RegExpExecArray => match.index !== undefined)
+      .map((match) => ({ match, parser }));
+    allMatches.push(...matches);
   });
 
   allMatches.sort((a, b) => a.match.index - b.match.index);
