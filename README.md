@@ -11,57 +11,57 @@ Learn more about writing `.jsx` files for After Effects here: https://motiondeve
 
 ## Overview
 
-This library provides a few functions for turning text strings into an array of style objects. This can then be used in Ae to style an position a bunch of text layers.
+This library takes in a string of markdown, and renders it using the appropriate `set` text style expressions.
 
 ```ts
-type StyleResult = { content: string; style: string; line: number }[];
+const { parse } = footage('style-parser.jsx').sourceData.get();
 
-/** Parse a markdown-ish string*/
-type parseStyles = (
-  textString: string,
-  parsers?: Array<{ matcher: RegExp; stylename: string }>
-) => StyleResult;
-
-/** Style the given word indexes */
-type styleByIndex = (textString: string, {
-   boldIndexes: number[],
-   italicsIndexes: number[]
-}) => StyleResult;
-
-/** Style the given words */
-type styleBySearch = (textString: string, {
-   boldString?: string,
-   italicsString?: string,
-}) => StyleResult;
+parse(value);
 ```
 
-## Example
+For example, by default the text wrapped in `*` will be set to a bold font, and text wrapped in `_` will be italicized.
 
-Expression:
+> For the full set of default parsers, see [/src/parsers.ts](src/parsers.ts).
+
+So the following source text:
+
+```txt
+This is *a string* of _markdown_
+```
+
+Will result in the expression:
 
 ```js
-const { parseStyles } = footage('style-parser.jsx').sourceData;
-const textString = `This will
-*be bold* and
-this will _be italics_`;
-
-const parsed = parseStyles(textString);
+text.sourceText.style
+  .setFont('Verdana-Bold', 8, 16)
+  .setFont('Verdana-Italic', 20, 8)
+  .setText('This is a string of markdown');
 ```
 
-Results in:
+## API
 
-```js
-[
-  { content: 'This will', style: 'regular', line: 0 },
+### Parse function
 
-  { content: 'be bold', style: 'bold', line: 1 },
-  { content: 'and', style: 'regular', line: 1 },
-
-  { content: 'this will', style: 'regular', line: 2 },
-  { content: 'be italics', style: 'italics', line: 2 },
-];
+```ts
+parse(markdown: string, parsers: Parser[]): TextStyle;
 ```
 
-## Limitations
+### Custom parsers
 
-Currently you need to style whole words in each method, otherwise you'll get unnecessary spaces inserted.
+```ts
+type Parser = {
+  name: string;
+  matcher?: RegExp;
+  styles: StyleDefinition;
+};
+```
+
+`StyleDefintion` is an object, where each property is a settable [`TextStyle`](https://docs.motiondeveloper.com/classes/textstyle) attribute with an equivalent value type. For example:
+
+```ts
+parse(value, [
+  { name: 'bold', styles: { fontSize: 40, fillColor: [1, 0, 0, 1] } },
+  { name: 'italic', styles: { fontName: 'Arial-Italic ' } },
+  { name: 'wide', matcher: /~(.*?)~/g, styles: { tracking: 130 } },
+]);
+```
