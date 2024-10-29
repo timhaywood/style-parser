@@ -1,17 +1,33 @@
 export const version: string = '_npmVersion';
 
-import { Layer } from 'expression-globals-typescript';
+import { Layer, TextStyle } from 'expression-globals-typescript';
 import { parsers } from './parsers';
-import { MarkdownParser, Parser, Style, StyleMethod, Transform } from './types';
+import {
+  FontMap,
+  MarkdownParser,
+  Parser,
+  Style,
+  StyleMethod,
+  Transform,
+} from './types';
 
 const thisLayer = new Layer();
 
 //
 
-export function parse(markdown: string, customParsers?: Parser[]) {
-  const allParsers = createParsers(customParsers);
+type ParseOptions = {
+  parsers?: Parser[];
+  fontMap?: Partial<FontMap>;
+  textStyle?: TextStyle;
+};
+
+export function parse(
+  markdown: string,
+  { fontMap, parsers, textStyle }: ParseOptions | undefined = {}
+) {
+  const allParsers = createParsers(parsers, fontMap);
   const { cleaned, transforms } = parseMarkdown(markdown, allParsers);
-  return createRender(cleaned, transforms);
+  return createRender(cleaned, transforms, textStyle);
 }
 
 export function parseMarkdown(
@@ -53,8 +69,20 @@ export function parseMarkdown(
   return { cleaned, transforms };
 }
 
-export function createParsers(customParsers: (Parser | MarkdownParser)[] = []) {
-  const mergedStyles = parsers.map((parser) => {
+export function createParsers(
+  customParsers: (Parser | MarkdownParser)[] = [],
+  fontMap?: Partial<FontMap>
+) {
+  const defaultFonts: FontMap = {
+    bold: 'Menlo-Bold',
+    italic: 'Menlo-Italic',
+    regular: 'Menlo-Regular',
+  };
+
+  // Override the default fonts with any custom ones
+  const fonts = { ...defaultFonts, ...fontMap };
+
+  const mergedStyles = parsers(fonts).map((parser) => {
     const custom = customParsers.find(
       (customParser) => customParser.name === parser.name
     );
@@ -76,17 +104,23 @@ export function createParsers(customParsers: (Parser | MarkdownParser)[] = []) {
 
 export function createRender(
   cleanString: string,
-  transforms: Transform<any>[]
+  transforms: Transform<any>[],
+  textStyle?: TextStyle
 ) {
-  if (!thisLayer.text) throw `${thisLayer.name} is not a TextLayer!`;
-
-  const style = thisLayer.text.sourceText.style;
+  let rootStyle = textStyle;
+  if (rootStyle === undefined && thisLayer.text !== undefined) {
+    // No custom style passed, used the one from the current layer
+    rootStyle = thisLayer.text.sourceText.style;
+  } else if (rootStyle === undefined) {
+    // If it's not a text layer, throw an error
+    throw `Error accessing default text style, this layer is not a text layer`;
+  }
 
   return transforms
-    .reduce((textStyle, { method, args }) => {
+    .reduce((style, { method, args }) => {
       // @ts-expect-error "Expected 1 arguments, but got 3.ts(2554)" (new AE API expects 3 arguments)
-      return textStyle[method as StyleMethod](...args);
-    }, style)
+      return style[method as StyleMethod](...args);
+    }, rootStyle)
     .setText(cleanString);
 }
 

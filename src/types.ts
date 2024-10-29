@@ -8,6 +8,9 @@ export type StyleDefinition = {
   [K in Style]?: Value<MethodMap<TextStyle>[`set${Capitalize<K>}`]>;
 };
 
+type Font = 'regular' | 'bold' | 'italic';
+export type FontMap = Record<Font, string>;
+
 export type Parser = {
   name: string;
   matcher: RegExp;

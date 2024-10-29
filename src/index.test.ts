@@ -58,7 +58,21 @@ test('correctly overwrites *bold* parser style', () => {
   expect(parsers.find((p) => p.name === 'bold')).toEqual({
     name: 'bold',
     matcher: /\*(.*?)\*/g,
-    styles: { fillColor: [1, 1, 0] },
+    styles: { fillColor: [1, 1, 0], font: 'Menlo-Bold' },
+  });
+});
+
+//
+
+test('correctly uses custom font map', () => {
+  const parsers = createParsers(undefined, {
+    bold: 'Font-Bold',
+  });
+
+  expect(parsers.find((p) => p.name === 'bold')).toEqual({
+    name: 'bold',
+    matcher: /\*(.*?)\*/g,
+    styles: { font: 'Font-Bold' },
   });
 });
 

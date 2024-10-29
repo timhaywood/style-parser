@@ -43,10 +43,14 @@ text.sourceText.style
 ### Parse function
 
 ```ts
-parse(markdown: string, parsers: Parser[]): TextStyle;
+parse(markdown: string, {
+  parsers?: Parser[],
+  fontMap?: FontMap,
+  textStyle?: TextStyle
+}): TextStyle;
 ```
 
-### Custom parsers
+### `parsers`
 
 ```ts
 type Parser = {
@@ -59,9 +63,44 @@ type Parser = {
 `StyleDefintion` is an object, where each property is a settable [`TextStyle`](https://docs.motiondeveloper.com/classes/textstyle) attribute with an equivalent value type. For example:
 
 ```ts
-parse(value, [
-  { name: 'bold', styles: { fontSize: 40, fillColor: [1, 0, 0, 1] } },
-  { name: 'italic', styles: { fontName: 'Arial-Italic ' } },
-  { name: 'wide', matcher: /~(.*?)~/g, styles: { tracking: 130 } },
-]);
+parse(value, {
+  parsers: [
+    { name: 'bold', styles: { fontSize: 40, fillColor: [1, 0, 0, 1] } },
+    { name: 'italic', styles: { fontName: 'Arial-Italic ' } },
+    { name: 'wide', matcher: /~(.*?)~/g, styles: { tracking: 130 } },
+  ],
+});
+```
+
+### `fontMap`
+
+```ts
+type FontMap = {
+  regular?: string;
+  bold?: string;
+  italic?: string;
+};
+```
+
+To avoid having to manually set the `fontName` for multiple styles (such as bold and all the headings), you can pass in a `fontMap` object that will be used to set the default fonts for each parser. For example:
+
+```ts
+parse(value, { fontMap: { bold: 'Menlo-Bold' } });
+```
+
+Will set the `fontName` for all the bold parsers to 'Menlo-Bold'.
+
+### `textStyle`
+
+```ts
+// typeof thisLayer.text.sourceText.style
+type textStyle = TextStyle;
+```
+
+By default, the `parse` function will apply the default text style from the current layer. You can pass in a custom text style if you want to modify the default styles, or inherit them from another layer. For example:
+
+```ts
+// Modify the current style
+const textStyle = thisLayer.text.sourceText.style.setLeading(20);
+parse(value, { textStyle });
 ```
