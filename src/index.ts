@@ -6,8 +6,8 @@ import {
   FontMap,
   MarkdownParser,
   Parser,
-  Style,
   StyleMethod,
+  StyleProp,
   Transform,
 } from './types';
 
@@ -27,7 +27,7 @@ export function parse(
 ) {
   const allParsers = createParsers(parsers, fontMap);
   const { cleaned, transforms } = parseMarkdown(markdown, allParsers);
-  return createRender(cleaned, transforms, textStyle);
+  return createTextStyle(cleaned, transforms, textStyle);
 }
 
 export function parseMarkdown(
@@ -54,10 +54,10 @@ export function parseMarkdown(
     const rawMatch = match[0];
     const content = match[1];
 
-    for (const style in parser.styles) {
-      const value = parser.styles[style as Style];
+    for (const prop in parser.styles) {
+      const value = parser.styles[prop as StyleProp];
       transforms.push({
-        method: styleToStyleMethod(style as Style),
+        method: stylePropToMethod(prop as StyleProp),
         args: [value, start - removedChars, content.length],
       });
     }
@@ -102,7 +102,7 @@ export function createParsers(
   return [...mergedStyles, ...customStyles];
 }
 
-export function createRender(
+export function createTextStyle(
   cleanString: string,
   transforms: Transform<any>[],
   textStyle?: TextStyle
@@ -126,7 +126,7 @@ export function createRender(
 
 //
 
-function styleToStyleMethod(style: Style) {
-  const upper = style.charAt(0).toUpperCase();
-  return `set${upper}${style.slice(1)}` as StyleMethod;
+function stylePropToMethod(prop: StyleProp) {
+  const upper = prop.charAt(0).toUpperCase();
+  return `set${upper}${prop.slice(1)}` as StyleMethod;
 }

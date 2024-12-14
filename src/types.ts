@@ -1,43 +1,44 @@
 import { TextStyle } from 'expression-globals-typescript';
 import { parsers } from './parsers';
 
-export type StyleMethod = Setters<TextStyle>;
-export type Style = Styles<TextStyle>;
+export type StyleProp = Props<TextStyle>;
+export type StyleMethod = Methods<TextStyle>;
+export type StyleValue<M extends StyleMethod> = Value<MethodMap<TextStyle>[M]>;
 
-export type StyleDefinition = {
-  [K in Style]?: Value<MethodMap<TextStyle>[`set${Capitalize<K>}`]>;
+export type Styles = {
+  [K in StyleProp]?: StyleValue<`set${Capitalize<K>}`>;
 };
 
-type Font = 'regular' | 'bold' | 'italic';
-export type FontMap = Record<Font, string>;
+type FontStyle = 'regular' | 'bold' | 'italic';
+export type FontMap = Record<FontStyle, string>;
 
 export type Parser = {
   name: string;
   matcher: RegExp;
-  styles: StyleDefinition;
+  styles: Styles;
 };
 
-export type MarkdownStyle = typeof parsers[number]['name'];
+export type MarkdownStyle = ReturnType<typeof parsers>[number]['name'];
 export type MarkdownParser = Omit<Parser, 'matcher'> & { name: MarkdownStyle };
 
 export type Transform<M extends StyleMethod> = {
   method: M;
-  args: [Value<MethodMap<TextStyle>[M]>, number?, number?];
+  args: [StyleValue<M>, number?, number?];
 };
 
 //
 
-type Setters<T> = keyof T extends infer K
+type Methods<T> = keyof T extends infer K
   ? K extends `set${string}`
     ? K
     : never
   : never;
 
-type Styles<T> = Setters<T> extends infer K
+type Props<T> = Methods<T> extends infer K
   ? K extends `set${infer Rest}`
     ? Uncapitalize<Rest>
     : never
   : never;
 
-type MethodMap<T> = { [K in Setters<T>]: T[K] };
+type MethodMap<T> = { [K in Methods<T>]: T[K] };
 type Value<T> = T extends (arg: infer A, ...args: any[]) => any ? A : never;
