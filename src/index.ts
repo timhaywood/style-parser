@@ -8,6 +8,7 @@ import {
   Parser,
   StyleMethod,
   StyleProp,
+  Styles,
   Transform,
 } from './types';
 
@@ -107,18 +108,11 @@ export function createTextStyle(
   transforms: Transform<any>[],
   textStyle?: TextStyle
 ) {
-  let rootStyle = textStyle;
-  if (rootStyle === undefined && thisLayer.text !== undefined) {
-    // No custom style passed, used the one from the current layer
-    rootStyle = thisLayer.text.sourceText.style;
-  } else if (rootStyle === undefined) {
-    // If it's not a text layer, throw an error
-    throw `Error accessing default text style, this layer is not a text layer`;
-  }
+  const rootStyle = getTextStyle(textStyle);
 
   return transforms
     .reduce((style, { method, args }) => {
-      // @ts-expect-error "Expected 1 arguments, but got 3.ts(2554)" (new AE API expects 3 arguments)
+      // @ts-expect-error for args[0]: Argument of type 'unknown' is not assignable to parameter of type 'never'.ts(2345)
       return style[method as StyleMethod](...args);
     }, rootStyle)
     .setText(cleanString);
@@ -129,4 +123,29 @@ export function createTextStyle(
 function stylePropToMethod(prop: StyleProp) {
   const upper = prop.charAt(0).toUpperCase();
   return `set${upper}${prop.slice(1)}` as StyleMethod;
+}
+
+function getTextStyle(textStyle?: TextStyle) {
+  let rootStyle = textStyle;
+
+  if (rootStyle === undefined && thisLayer.text !== undefined) {
+    // No custom style passed, used the one from the current layer
+    rootStyle = thisLayer.text.sourceText.style;
+  } else if (rootStyle === undefined) {
+    // If it's not a text layer, throw an error
+    throw `Error accessing default text style, this layer is not a text layer`;
+  }
+
+  return rootStyle;
+}
+
+export function setStyles(styles: Styles, textStyle?: TextStyle) {
+  const rootStyle = getTextStyle(textStyle);
+
+  return Object.entries(styles).reduce((style, [prop, value]) => {
+    const method = stylePropToMethod(prop as StyleProp);
+    // Assert that the value matches the expected type for the method
+    return (style[method] as (arg: typeof value) => typeof style)(value);
+    // AKA: return style[method](value);
+  }, rootStyle);
 }
