@@ -28,7 +28,14 @@ export function parse(
 ) {
   const allParsers = createParsers(parsers, fontMap);
   const { cleaned, transforms } = parseMarkdown(markdown, allParsers);
-  return createTextStyle(cleaned, transforms, textStyle);
+  const rootStyle = getTextStyle(textStyle);
+
+  return transforms
+    .reduce((style, { method, args }) => {
+      // @ts-expect-error for args[0]: Argument of type 'unknown' is not assignable to parameter of type 'never'.ts(2345)
+      return style[method as StyleMethod](...args);
+    }, rootStyle)
+    .setText(cleaned);
 }
 
 export function parseMarkdown(
@@ -103,19 +110,15 @@ export function createParsers(
   return [...mergedStyles, ...customStyles];
 }
 
-export function createTextStyle(
-  cleanString: string,
-  transforms: Transform<any>[],
-  textStyle?: TextStyle
-) {
+export function createTextStyle(styles: Styles, textStyle?: TextStyle) {
   const rootStyle = getTextStyle(textStyle);
 
-  return transforms
-    .reduce((style, { method, args }) => {
-      // @ts-expect-error for args[0]: Argument of type 'unknown' is not assignable to parameter of type 'never'.ts(2345)
-      return style[method as StyleMethod](...args);
-    }, rootStyle)
-    .setText(cleanString);
+  return Object.entries(styles).reduce((style, [prop, value]) => {
+    const method = stylePropToMethod(prop as StyleProp);
+    // Assert that the value matches the expected type for the method
+    return (style[method] as (arg: typeof value) => typeof style)(value);
+    // AKA: return style[method](value);
+  }, rootStyle);
 }
 
 //
@@ -137,15 +140,4 @@ function getTextStyle(textStyle?: TextStyle) {
   }
 
   return rootStyle;
-}
-
-export function setStyles(styles: Styles, textStyle?: TextStyle) {
-  const rootStyle = getTextStyle(textStyle);
-
-  return Object.entries(styles).reduce((style, [prop, value]) => {
-    const method = stylePropToMethod(prop as StyleProp);
-    // Assert that the value matches the expected type for the method
-    return (style[method] as (arg: typeof value) => typeof style)(value);
-    // AKA: return style[method](value);
-  }, rootStyle);
 }
