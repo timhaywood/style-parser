@@ -1,5 +1,6 @@
 import { TextStyle } from 'expression-globals-typescript';
 import { parsers } from './parsers';
+import { Helpers } from '.';
 
 export type StyleProp = Props<TextStyle>;
 export type StyleMethod = Methods<TextStyle>;
@@ -24,6 +25,15 @@ export type MarkdownParser = Omit<Parser, 'matcher'> & { name: MarkdownStyle };
 export type Transform<M extends StyleMethod> = {
   method: M;
   args: [StyleValue<M>, number?, number?];
+};
+
+//
+
+export type Parsed = { text: string; transforms: Transform<any>[] };
+
+export type Plugin = {
+  name: string;
+  transform: (parsed: Parsed, helpers: Helpers) => Parsed;
 };
 
 //

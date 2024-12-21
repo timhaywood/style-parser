@@ -5,7 +5,9 @@ import { parsers } from './parsers';
 import {
   FontMap,
   MarkdownParser,
+  Parsed,
   Parser,
+  Plugin,
   StyleMethod,
   StyleProp,
   Styles,
@@ -20,22 +22,28 @@ type ParseOptions = {
   parsers?: Parser[];
   fontMap?: Partial<FontMap>;
   textStyle?: TextStyle;
+  plugins?: Plugin[];
 };
 
 export function parse(
   markdown: string,
-  { fontMap, parsers, textStyle }: ParseOptions | undefined = {}
+  { fontMap, parsers, textStyle, plugins = [] }: ParseOptions | undefined = {}
 ) {
   const allParsers = createParsers(parsers, fontMap);
-  const { cleaned, transforms } = parseMarkdown(markdown, allParsers);
+  let parsed = parseMarkdown(markdown, allParsers);
+
+  for (const plugin of plugins) {
+    parsed = plugin.transform(parsed, helpers);
+  }
+
   const rootStyle = getTextStyle(textStyle);
 
-  return transforms
+  return parsed.transforms
     .reduce((style, { method, args }) => {
       // @ts-expect-error for args[0]: Argument of type 'unknown' is not assignable to parameter of type 'never'.ts(2345)
       return style[method as StyleMethod](...args);
     }, rootStyle)
-    .setText(cleaned);
+    .setText(parsed.text);
 }
 
 export function parseMarkdown(
@@ -74,7 +82,7 @@ export function parseMarkdown(
     cleaned = cleaned.replace(rawMatch, content);
   });
 
-  return { cleaned, transforms };
+  return { text: cleaned, transforms } as Parsed;
 }
 
 export function createParsers(
@@ -128,6 +136,11 @@ function stylePropToMethod(prop: StyleProp) {
   return `set${upper}${prop.slice(1)}` as StyleMethod;
 }
 
+function styleMethodToProp(styleMethod: StyleMethod) {
+  const propName = styleMethod.slice(3);
+  return (propName.charAt(0).toLowerCase() + propName.slice(1)) as StyleProp;
+}
+
 function getTextStyle(textStyle?: TextStyle) {
   let rootStyle = textStyle;
 
@@ -140,4 +153,58 @@ function getTextStyle(textStyle?: TextStyle) {
   }
 
   return rootStyle;
+}
+
+//
+
+export type Helpers = typeof helpers;
+export const helpers = {
+  updateTransforms,
+  getStylesAtIndex,
+} as const;
+
+function getTransformsAtIndex(parsed: Parsed, targetIndex: number) {
+  return parsed.transforms.filter((transform) => {
+    const [, start = 0, length = 0] = transform.args;
+    const end = start + length;
+    return start <= targetIndex && targetIndex < end;
+  });
+}
+
+export function getStylesAtIndex(
+  parsed: Parsed,
+  targetIndex: number,
+  defaultStlyes?: Styles
+) {
+  const result = getTransformsAtIndex(parsed, targetIndex).reduce(
+    (styles, transform) => ({
+      ...styles,
+      [styleMethodToProp(transform.method)]: transform.args[0],
+    }),
+    {}
+  );
+
+  return {
+    ...(defaultStlyes || {}),
+    ...result,
+  };
+}
+
+export function updateTransforms(
+  transforms: Transform<any>[],
+  index: number,
+  offset: number,
+  lengthAdjustment?: (transform: Transform<any>) => number
+): Transform<any>[] {
+  return transforms.map((transform) => {
+    const [value, start = 0, length = 0] = transform.args;
+
+    if (start >= index) {
+      const newStart = start + offset;
+      const newLength = lengthAdjustment ? lengthAdjustment(transform) : length;
+      return { ...transform, args: [value, newStart, newLength] };
+    }
+
+    return transform;
+  });
 }
