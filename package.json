@@ -1,6 +1,6 @@
 {
   "name": "style-parser",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "After Effects Expression Library",
   "main": "dist/style-parser.jsx",
   "scripts": {
@@ -27,12 +27,12 @@
     "jest": "^26.6.3",
     "prettier": "^2.2.1",
     "rollup": "^2.42.4",
-    "rollup-plugin-ae-jsx": "^2.0.0",
+    "rollup-plugin-ae-jsx": "^2.1.1",
     "ts-jest": "^26.5.4",
     "tslib": "^2.1.0",
     "typescript": "^4.2.3"
   },
   "dependencies": {
-    "expression-globals-typescript": "^3.2.6"
+    "expression-globals-typescript": "^3.3.0"
   }
 }

@@ -1,155 +1,210 @@
-type ParsedSection = {
-  content: string;
-  style: string;
-  line: number;
+export const version: string = '_npmVersion';
+
+import { Layer, TextStyle } from 'expression-globals-typescript';
+import { parsers } from './parsers';
+import {
+  FontMap,
+  MarkdownParser,
+  Parsed,
+  Parser,
+  Plugin,
+  StyleMethod,
+  StyleProp,
+  Styles,
+  Transform,
+} from './types';
+
+const thisLayer = new Layer();
+
+//
+
+type ParseOptions = {
+  parsers?: Parser[];
+  fontMap?: Partial<FontMap>;
+  textStyle?: TextStyle;
+  plugins?: Plugin[];
 };
 
-function parseStyles(
-  inputText: string,
-  customParsers: Array<{ matcher: RegExp; stylename: string }> = []
-): ParsedSection[] {
-  /** Split the input text into an array of lines */
-  const inputLines = inputText.split(/[\r\n\3]/g);
+export function parse(
+  markdown: string,
+  { fontMap, parsers, textStyle, plugins = [] }: ParseOptions | undefined = {}
+) {
+  const allParsers = createParsers(parsers, fontMap);
+  let parsed = parseMarkdown(markdown, allParsers);
 
-  /** Creates a function that turns lines into a style tree based on a given regex */
-  function createLineParser(matcher: RegExp, stylename: string) {
-    return (line: string | ParsedSection | ParsedSection[], index: number) => {
-      // Section has already been parsed
-      if (typeof line !== 'string') return line;
-      const captureGroups = matcher.exec(line);
-      // Line doesn't contain matching styles, return as is
-      if (!captureGroups) return line;
-
-      // Return parsed styles
-      return (
-        line
-          // Split by the style regex
-          .split(matcher)
-          .map((section) => {
-            // Remove whitespace
-            const content = section.trim();
-            // If the content is empty, return null so we can filter it out
-            if (content === '') return null;
-            // The content is what matched the regex, it's the styled content
-            if (content === captureGroups[1]) {
-              return { line: index, content, style: stylename };
-            }
-            // It's unstyled
-            return { line: index, content, style: 'regular' };
-          })
-          .filter(Boolean) as ParsedSection[]
-      );
-    };
+  for (const plugin of plugins) {
+    parsed = plugin.transform(parsed, helpers);
   }
 
-  const parsers = [
-    ...customParsers,
-    { stylename: 'bold', matcher: new RegExp(/\*(.*)\*/) },
-    { stylename: 'italics', matcher: new RegExp(/_(.*)_/) },
-  ];
+  const rootStyle = getTextStyle(textStyle);
 
-  // Parse all the styles
-  let styles = inputLines;
-  for (const { matcher, stylename } of parsers) {
-    const parser = createLineParser(matcher, stylename);
-    styles = styles.map(parser);
-  }
-
-  const parsedStyles = styles.map((line, index) =>
-    typeof line === 'string'
-      ? [{ content: line, style: 'regular', line: index }]
-      : line
-  );
-
-  return parsedStyles.flat();
+  return parsed.transforms
+    .reduce((style, { method, args }) => {
+      // @ts-expect-error for args[0]: Argument of type 'unknown' is not assignable to parameter of type 'never'.ts(2345)
+      return style[method as StyleMethod](...args);
+    }, rootStyle)
+    .setText(parsed.text);
 }
 
-function styleByIndex(
-  inputText: string,
-  {
-    boldIndexes,
-    italicsIndexes,
-  }: { boldIndexes: number[]; italicsIndexes: number[] }
-): ParsedSection[] {
-  const inputLines = inputText.split(/[\r\n\3]/g);
-  const words = inputLines.flatMap((line, index) =>
-    line
-      .trim()
-      .split(' ')
-      .map((word) => ({ content: word, line: index }))
-  );
+export function parseMarkdown(
+  markdown: string,
+  parsers: Parser[] = createParsers()
+) {
+  const allMatches: { match: RegExpExecArray; parser: Parser }[] = [];
 
-  const wordsWithStyles = words.map((word, index) => {
-    let style = 'regular';
-    if (boldIndexes.includes(index)) style = 'bold';
-    if (italicsIndexes.includes(index)) style = 'italics';
-    return {
-      ...word,
-      style,
-    };
+  parsers.forEach((parser) => {
+    const matches = [...markdown.matchAll(parser.matcher)]
+      .filter((match): match is RegExpExecArray => match.index !== undefined)
+      .map((match) => ({ match, parser }));
+    allMatches.push(...matches);
   });
 
-  return wordsWithStyles;
-}
+  allMatches.sort((a, b) => a.match.index - b.match.index);
 
-function styleBySearch(
-  inputText: string,
-  {
-    boldString,
-    italicsString,
-  }: { boldString?: string; italicsString?: string } = {}
-): ParsedSection[] {
-  let regex;
-  const italics = italicsString ? italicsString.trim() : '';
-  const bold = boldString ? boldString.trim() : '';
-  if (boldString && italicsString) {
-    regex = new RegExp(`(${bold})|(${italics})`, 'g');
-  } else if (boldString) {
-    regex = new RegExp(`(${bold})`, 'g');
-  } else if (italicsString) {
-    regex = new RegExp(`(${italics})`, 'g');
-  }
+  let cleaned = markdown;
+  let removedChars = 0;
+  const transforms: Transform<any>[] = [];
 
-  if (!regex) {
-    return [
-      {
-        content: inputText,
-        style: 'regular',
-        line: 0,
-      },
-    ];
-  }
+  allMatches.forEach(({ match, parser }) => {
+    const start = match.index!;
+    const rawMatch = match[0];
+    const content = match[1];
 
-  const inputLines = inputText.split(/[\r\n\3]/g);
-
-  return inputLines.flatMap((line, index) => {
-    return line
-      .split(regex)
-      .filter(Boolean)
-      .map((part) => {
-        const style =
-          part === boldString
-            ? 'bold'
-            : part === italicsString
-            ? 'italics'
-            : 'regular';
-        return {
-          content: part.trim(),
-          style,
-          line: index,
-        };
+    for (const prop in parser.styles) {
+      const value = parser.styles[prop as StyleProp];
+      transforms.push({
+        method: stylePropToMethod(prop as StyleProp),
+        args: [value, start - removedChars, content.length],
       });
+    }
+
+    removedChars += rawMatch.length - content.length;
+    cleaned = cleaned.replace(rawMatch, content);
+  });
+
+  return { text: cleaned, transforms } as Parsed;
+}
+
+export function createParsers(
+  customParsers: (Parser | MarkdownParser)[] = [],
+  fontMap?: Partial<FontMap>
+) {
+  const defaultFonts: FontMap = {
+    bold: 'Menlo-Bold',
+    italic: 'Menlo-Italic',
+    regular: 'Menlo-Regular',
+  };
+
+  // Override the default fonts with any custom ones
+  const fonts = { ...defaultFonts, ...fontMap };
+
+  const mergedStyles = parsers(fonts).map((parser) => {
+    const custom = customParsers.find(
+      (customParser) => customParser.name === parser.name
+    );
+    return {
+      name: parser.name,
+      // Override default matchers with custom ones if present
+      matcher: custom && 'matcher' in custom ? custom.matcher : parser.matcher,
+      // Merge custom styles with default ones
+      styles: custom ? { ...parser.styles, ...custom.styles } : parser.styles,
+    } as Parser;
+  });
+
+  const customStyles = customParsers.filter(
+    (customParser) => !mergedStyles.some((mp) => mp.name === customParser.name)
+  ) as Parser[];
+
+  return [...mergedStyles, ...customStyles];
+}
+
+export function createTextStyle(styles: Styles, textStyle?: TextStyle) {
+  const rootStyle = getTextStyle(textStyle);
+
+  return Object.entries(styles).reduce((style, [prop, value]) => {
+    const method = stylePropToMethod(prop as StyleProp);
+    // Assert that the value matches the expected type for the method
+    return (style[method] as (arg: typeof value) => typeof style)(value);
+    // AKA: return style[method](value);
+  }, rootStyle);
+}
+
+//
+
+function stylePropToMethod(prop: StyleProp) {
+  const upper = prop.charAt(0).toUpperCase();
+  return `set${upper}${prop.slice(1)}` as StyleMethod;
+}
+
+function styleMethodToProp(styleMethod: StyleMethod) {
+  const propName = styleMethod.slice(3);
+  return (propName.charAt(0).toLowerCase() + propName.slice(1)) as StyleProp;
+}
+
+function getTextStyle(textStyle?: TextStyle) {
+  let rootStyle = textStyle;
+
+  if (rootStyle === undefined && thisLayer.text !== undefined) {
+    // No custom style passed, used the one from the current layer
+    rootStyle = thisLayer.text.sourceText.style;
+  } else if (rootStyle === undefined) {
+    // If it's not a text layer, throw an error
+    throw `Error accessing default text style, this layer is not a text layer`;
+  }
+
+  return rootStyle;
+}
+
+//
+
+export type Helpers = typeof helpers;
+export const helpers = {
+  updateTransforms,
+  getStylesAtIndex,
+} as const;
+
+function getTransformsAtIndex(parsed: Parsed, targetIndex: number) {
+  return parsed.transforms.filter((transform) => {
+    const [, start = 0, length = 0] = transform.args;
+    const end = start + length;
+    return start <= targetIndex && targetIndex < end;
   });
 }
 
-const defaultFontMap = {
-  bold: 'Arial-BoldMT',
-  italics: 'Arial-ItalicMT',
-};
+export function getStylesAtIndex(
+  parsed: Parsed,
+  targetIndex: number,
+  defaultStlyes?: Styles
+) {
+  const result = getTransformsAtIndex(parsed, targetIndex).reduce(
+    (styles, transform) => ({
+      ...styles,
+      [styleMethodToProp(transform.method)]: transform.args[0],
+    }),
+    {}
+  );
 
-// '_npmVersion' is replaced with value from package.json
-// during compilation
-const version: string = '_npmVersion';
+  return {
+    ...(defaultStlyes || {}),
+    ...result,
+  };
+}
 
-// Export values to appear in jsx files
-export { parseStyles, styleByIndex, styleBySearch, defaultFontMap, version };
+export function updateTransforms(
+  transforms: Transform<any>[],
+  index: number,
+  offset: number,
+  lengthAdjustment?: (transform: Transform<any>) => number
+): Transform<any>[] {
+  return transforms.map((transform) => {
+    const [value, start = 0, length = 0] = transform.args;
+
+    if (start >= index) {
+      const newStart = start + offset;
+      const newLength = lengthAdjustment ? lengthAdjustment(transform) : length;
+      return { ...transform, args: [value, newStart, newLength] };
+    }
+
+    return transform;
+  });
+}
